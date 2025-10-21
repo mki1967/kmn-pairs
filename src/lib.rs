@@ -162,6 +162,15 @@ impl Permutation {
         p[i]
     }
 
+    pub fn swap(&mut self, i: usize, j: usize) {
+        let Permutation(p) = self;
+        let n = p.len();
+        if i >= n || j >= n {
+            return; // ignore - consider some panic! instead
+        }
+        p.swap(i, j);
+    }
+
     pub fn randomize(&mut self, rng: &mut impl Rng) {
         let Permutation(p) = self;
         let n = p.len();
@@ -286,6 +295,34 @@ impl Assignments {
     // randomizes r_permutation
     pub fn randomize_right(&mut self, rng: &mut impl Rng) {
         self.r_permutation.randomize(rng);
+    }
+
+    pub fn random_swaps_of_r_forbidden(&mut self, rng: &mut impl Rng) {
+        let n = self.n; // for right side
+        for i in 0..self.pairs.len() {
+            let Pairs(v) = &self.pairs;
+            let (l, r) = (
+                self.l_permutation.value(v[i].left()),
+                self.r_permutation.value(v[i].right()),
+            );
+            if self.forbidden.contains(&(l, r)) {
+                self.r_permutation.swap(r, rng.random_range(0..n));
+            }
+        }
+    }
+
+    pub fn random_swaps_of_l_forbidden(&mut self, rng: &mut impl Rng) {
+        let m = self.m; // for left side
+        for i in 0..self.pairs.len() {
+            let Pairs(v) = &self.pairs;
+            let (l, r) = (
+                self.l_permutation.value(v[i].left()),
+                self.r_permutation.value(v[i].right()),
+            );
+            if self.forbidden.contains(&(l, r)) {
+                self.l_permutation.swap(l, rng.random_range(0..m));
+            }
+        }
     }
 }
 

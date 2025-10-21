@@ -1,7 +1,7 @@
 use kmn_pairs::*;
 use std::io;
 // use text_io::read;
-// use rand::Rng;
+use rand::Rng;
 
 fn read_line() -> String {
     let mut input = String::new();
@@ -30,7 +30,7 @@ fn main() {
    The user can:
        - display A grouped by left/right component (commands: `gl`/`gr`),
        - add new 'forbidden pair' to F (command: `af`),
-       - randomize p_l/p_r  up to some max times, until A contains no 'forbidden pairs' (commands: `rl`/`rr`).
+       - randomize p_l/p_r  up to some max times, until A contains no 'forbidden pairs' (commands: `rl`/`rr`/`rlr`/`sr`/`sl`).
 --------------------------------------------------------------------------------------------------------------------
 
 "#
@@ -93,6 +93,9 @@ fn main() {
             gr       group by right
             rl       randomly permute left IDs
             rr       randomly permute right IDs
+            rlr      randomly permute left and right IDs
+            sr       swap right IDs of forbidden with random other right IDs
+            sl       swap left IDs of forbidden with random other left IDs
             af       add forbidden
             restart  restart with new parameters: k,m,n
             quit     end the program
@@ -157,7 +160,115 @@ fn main() {
                         println!("max = {}", max);
                         for step in 1..=max {
                             assignments.randomize_right(&mut rng);
-                            //println!("Randomly permuted left IDs.");
+                            if assignments.number_of_forbidden_used() == 0 {
+                                println!("Found zero forbidden in step {}!", step);
+                                break;
+                            }
+                        }
+                        println!("{}: done.", cmd);
+                    }
+                }
+                "rlr" => {
+                    println!(
+                        "{}: input max l_percent (0 <= max and 0<= l_percent <= 100): ",
+                        cmd
+                    );
+                    let input = read_line();
+                    let input = &input.trim();
+                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
+                    if args.len() != 2 {
+                        println!(
+                            "Input line \"{}\" contained {} arguments instead of 2 !!!",
+                            &input,
+                            args.len()
+                        );
+                    } else {
+                        let max; // = 0;   // default value?
+                        let l_percent; // = 50;  // default value?
+                        let (m, p) = (args[0].parse::<usize>(), args[1].parse::<usize>());
+                        if let (Ok(m), Ok(p)) = (m, p) {
+                            max = m;
+                            l_percent = p;
+                        } else {
+                            println!("Bad input!");
+                            break;
+                        }
+                        println!("max = {}", max);
+                        let mut l_count = 0;
+                        let mut r_count = 0;
+                        for step in 1..=max {
+                            if rng.random_range(0..100) < l_percent {
+                                l_count = l_count + 1;
+                                assignments.randomize_left(&mut rng);
+                            } else {
+                                r_count = r_count + 1;
+                                assignments.randomize_right(&mut rng);
+                            }
+                            if assignments.number_of_forbidden_used() == 0 {
+                                println!(
+                                    "Found zero forbidden in step {}! (left={},right={}) permutations done.",
+                                    step, l_count, r_count
+                                );
+                                break;
+                            }
+                        }
+                        println!("{}: done: ", cmd);
+                    }
+                }
+                "sr" => {
+                    println!(
+                        "{}: input max (0 <= max) for max trials to find assignments without forbidden: ",
+                        cmd
+                    );
+                    let mut max = 0; // default max value
+                    let input = read_line();
+                    let input = &input.trim();
+                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
+                    if args.len() != 1 {
+                        println!(
+                            "Input line \"{}\" contained {} arguments instead of 1 !!!",
+                            &input,
+                            args.len()
+                        );
+                    } else {
+                        let m = args[0].parse::<usize>();
+                        if let Ok(m) = m {
+                            max = m;
+                        }
+                        println!("max = {}", max);
+                        for step in 1..=max {
+                            assignments.random_swaps_of_r_forbidden(&mut rng);
+                            if assignments.number_of_forbidden_used() == 0 {
+                                println!("Found zero forbidden in step {}!", step);
+                                break;
+                            }
+                        }
+                        println!("{}: done.", cmd);
+                    }
+                }
+                "sl" => {
+                    println!(
+                        "{}: input max (0 <= max) for max trials to find assignments without forbidden: ",
+                        cmd
+                    );
+                    let mut max = 0; // default max value
+                    let input = read_line();
+                    let input = &input.trim();
+                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
+                    if args.len() != 1 {
+                        println!(
+                            "Input line \"{}\" contained {} arguments instead of 1 !!!",
+                            &input,
+                            args.len()
+                        );
+                    } else {
+                        let m = args[0].parse::<usize>();
+                        if let Ok(m) = m {
+                            max = m;
+                        }
+                        println!("max = {}", max);
+                        for step in 1..=max {
+                            assignments.random_swaps_of_l_forbidden(&mut rng);
                             if assignments.number_of_forbidden_used() == 0 {
                                 println!("Found zero forbidden in step {}!", step);
                                 break;
