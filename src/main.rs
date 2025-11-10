@@ -1,17 +1,14 @@
+// use kmn_pairs::cmd::*;
+use kmn_pairs::menu::*;
 use kmn_pairs::*;
-use std::io;
-// use text_io::read;
-use rand::Rng;
 
-fn read_line() -> String {
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Could not read line from input)");
-    input
-}
+// use std::io;
+// use text_io::read;
+// use rand::Rng;
 
 fn main() {
+    let mut assignments_data: Option<Assignments> = None;
+
     println!(
         r#"
 --------------------------------------------------------------------------------------------------------------------
@@ -20,325 +17,41 @@ fn main() {
         - P is a subset of the Cartesian product {{0,...,m-1}}x{{0,...,n-1}}, and
         - for each l in {{0,...,m-1}}, P contains p pairs from {{l}}x{{0,...,n-1}}  and
         - for each r in {{0,...,n-1}}, P contains either k or k+1 pairs from {{0,...,m-1}}x{{r}}, and
-   - inits two permutations p_l: {{0,...,m-1}} -> {{0,...,m-1}} and p_r: {{0,...,m-1}} -> {{0,...,m-1}} to identities.
+   - inits two permutations p_l: {{0,...,m-1}} -> {{0,...,m-1}} and p_r: {{0,...,n-1}} -> {{0,...,n-1}} to identities.
    The triple (P, p_l, p_r) defines an 'assignment' A consisting of all the pairs (p_l(l),p_r(r)) such that (l,r) is in P.
-   The assignment A can be changed by changing the permutations p_l or p_r.
+   The assignment A can be changed by changing:
+       - the permutations p_l or p_r (the result is isomorphic), or
+       - the underlying set P (the result may be not isomorphic).
    The user can define a set F of 'forbidden pairs' that should not be contained in A.
-   The program displays:
-       - the assignment A (marking the encountered 'forbidden pairs' with '!!!') and then
-       - the set F.
+   The program delivers a set of tools that help in finding satisfying assignments.
    The user can:
-       - display A grouped by left/right component (commands: `gl`/`gr`),
-       - add new 'forbidden pair' to F (command: `af`),
-       - randomize p_l/p_r  up to some max times, until A contains no 'forbidden pairs' (commands: `rl`/`rr`/`rlr`/`sr`/`sl`).
+       - display A and F, A, or itersection of F and A
+         (commands: `p`/`pa`/`pfa`),
+       - group A or F by left/right component
+         (commands: `gl`/`gr`/`fgl`/`fgr`),
+       - add new 'forbidden pairs' to F
+         (commands: `af`/`arf`/`arfl`/`arfr`),
+       - randomize p_l/p_r  up to some `max` times, until A contains no 'forbidden pairs'
+         (commands: `rl`/`rr`/`rlr`/`sr`/`sl`/`slr`/`bsr`/`bslr`),
+       - do cross-switching of the pairs in A (that may transform it to "not isomorphic" assignment)
+         (command: `sbrk`),
+       - restore the saved backup assignement (ususually the one with the minimal number of forbidden pairs)
+         (command: `back`),
+       - execute the tests checking integrity and discovering some conditions that disable finding assignment without forbidden pairs
+         (command: `test`),
+       - and view the list of available commands
+         (command: `h`).
 --------------------------------------------------------------------------------------------------------------------
 
 "#
     );
 
-    let mut rng = rand::rng(); // random number generator
-    loop {
-        let mut assignments: Assignments;
-        loop {
-            println!("input k m n (1 <= k <= m <= n): ");
-            let input = read_line();
-            let input = input.trim();
-            let args: Vec<&str> = input.split_ascii_whitespace().collect();
-            if args.len() != 3 {
-                println!(
-                    "Input line \"{}\" contained {} arguments instead of 3 !!!",
-                    &input,
-                    args.len()
-                );
-                continue;
-            }
-            let (k, m, n) = (
-                args[0].parse::<usize>(),
-                args[1].parse::<usize>(),
-                args[2].parse::<usize>(),
-            );
-            if let (Ok(k), Ok(m), Ok(n)) = (k, m, n) {
-                if !(1 <= k && k <= m && m <= n) {
-                    println!(
-                        "You have input (k,m,n)={:?}, that does not meet the condition: 1 <= k <= m <= n !!!",
-                        (k, m, n)
-                    );
-                    continue;
-                } else {
-                    // Ok,  set the assignments !
-                    assignments = Assignments::new(k, m, n);
-                    break;
-                }
-            } else {
-                println!(
-                    "Input line contained '{}' instead of 3 positive integers !!!",
-                    &input
-                );
-                continue;
-            }
-        }
-        // MENU - Actions on the assigments:
-        loop {
-            let (_k, m, n) = assignments.get_kmn(); // get the assignments' parameters
-            println!("{}", assignments);
-            println!("Input command (h for help): ");
-            let cmd = read_line();
-            let cmd = cmd.trim();
-            match cmd {
-                "h" => {
-                    println!(
-                        "
-        command action:
-            gl       group by left
-            gr       group by right
-            rl       randomly permute left IDs
-            rr       randomly permute right IDs
-            rlr      randomly permute left and right IDs
-            sr       swap right IDs of forbidden with random other right IDs
-            sl       swap left IDs of forbidden with random other left IDs
-            af       add forbidden
-            restart  restart with new parameters: k,m,n
-            quit     end the program
+    kmn_pairs_menu(&mut assignments_data);
 
-            (press ENTER to continue)
-"
-                    );
-                    read_line();
-                }
-                "rl" => {
-                    println!(
-                        "{}: input max (0 <= max) for max trials to find assignments without forbidden: ",
-                        cmd
-                    );
-                    let mut max = 0; // default max value
-                    let input = read_line();
-                    let input = &input.trim();
-                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
-                    if args.len() != 1 {
-                        println!(
-                            "Input line \"{}\" contained {} arguments instead of 1 !!!",
-                            &input,
-                            args.len()
-                        );
-                    } else {
-                        let m = args[0].parse::<usize>();
-                        if let Ok(m) = m {
-                            max = m;
-                        }
-                        println!("max = {}", max);
-                        for step in 1..=max {
-                            assignments.randomize_left(&mut rng);
-                            //println!("Randomly permuted left IDs.");
-                            if assignments.number_of_forbidden_used() == 0 {
-                                println!("Found zero forbidden in step {}!", step);
-                                break;
-                            }
-                        }
-                        println!("{}: done.", cmd);
-                    }
-                }
-                "rr" => {
-                    println!(
-                        "{}: input max (0 <= max) for max trials to find assignments without forbidden: ",
-                        cmd
-                    );
-                    let mut max = 0; // default max value
-                    let input = read_line();
-                    let input = &input.trim();
-                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
-                    if args.len() != 1 {
-                        println!(
-                            "Input line \"{}\" contained {} arguments instead of 1 !!!",
-                            &input,
-                            args.len()
-                        );
-                    } else {
-                        let m = args[0].parse::<usize>();
-                        if let Ok(m) = m {
-                            max = m;
-                        }
-                        println!("max = {}", max);
-                        for step in 1..=max {
-                            assignments.randomize_right(&mut rng);
-                            if assignments.number_of_forbidden_used() == 0 {
-                                println!("Found zero forbidden in step {}!", step);
-                                break;
-                            }
-                        }
-                        println!("{}: done.", cmd);
-                    }
-                }
-                "rlr" => {
-                    println!(
-                        "{}: input max l_percent (0 <= max and 0<= l_percent <= 100): ",
-                        cmd
-                    );
-                    let input = read_line();
-                    let input = &input.trim();
-                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
-                    if args.len() != 2 {
-                        println!(
-                            "Input line \"{}\" contained {} arguments instead of 2 !!!",
-                            &input,
-                            args.len()
-                        );
-                    } else {
-                        let max; // = 0;   // default value?
-                        let l_percent; // = 50;  // default value?
-                        let (m, p) = (args[0].parse::<usize>(), args[1].parse::<usize>());
-                        if let (Ok(m), Ok(p)) = (m, p) {
-                            max = m;
-                            l_percent = p;
-                        } else {
-                            println!("Bad input!");
-                            break;
-                        }
-                        println!("max = {}", max);
-                        let mut l_count = 0;
-                        let mut r_count = 0;
-                        for step in 1..=max {
-                            if rng.random_range(0..100) < l_percent {
-                                l_count = l_count + 1;
-                                assignments.randomize_left(&mut rng);
-                            } else {
-                                r_count = r_count + 1;
-                                assignments.randomize_right(&mut rng);
-                            }
-                            if assignments.number_of_forbidden_used() == 0 {
-                                println!(
-                                    "Found zero forbidden in step {}! (left={},right={}) permutations done.",
-                                    step, l_count, r_count
-                                );
-                                break;
-                            }
-                        }
-                        println!("{}: done: ", cmd);
-                    }
-                }
-                "sr" => {
-                    println!(
-                        "{}: input max (0 <= max) for max trials to find assignments without forbidden: ",
-                        cmd
-                    );
-                    let mut max = 0; // default max value
-                    let input = read_line();
-                    let input = &input.trim();
-                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
-                    if args.len() != 1 {
-                        println!(
-                            "Input line \"{}\" contained {} arguments instead of 1 !!!",
-                            &input,
-                            args.len()
-                        );
-                    } else {
-                        let m = args[0].parse::<usize>();
-                        if let Ok(m) = m {
-                            max = m;
-                        }
-                        println!("max = {}", max);
-                        for step in 1..=max {
-                            assignments.random_swaps_of_r_forbidden(&mut rng);
-                            if assignments.number_of_forbidden_used() == 0 {
-                                println!("Found zero forbidden in step {}!", step);
-                                break;
-                            }
-                        }
-                        println!("{}: done.", cmd);
-                    }
-                }
-                "sl" => {
-                    println!(
-                        "{}: input max (0 <= max) for max trials to find assignments without forbidden: ",
-                        cmd
-                    );
-                    let mut max = 0; // default max value
-                    let input = read_line();
-                    let input = &input.trim();
-                    let args: Vec<&str> = input.split_ascii_whitespace().collect();
-                    if args.len() != 1 {
-                        println!(
-                            "Input line \"{}\" contained {} arguments instead of 1 !!!",
-                            &input,
-                            args.len()
-                        );
-                    } else {
-                        let m = args[0].parse::<usize>();
-                        if let Ok(m) = m {
-                            max = m;
-                        }
-                        println!("max = {}", max);
-                        for step in 1..=max {
-                            assignments.random_swaps_of_l_forbidden(&mut rng);
-                            if assignments.number_of_forbidden_used() == 0 {
-                                println!("Found zero forbidden in step {}!", step);
-                                break;
-                            }
-                        }
-                        println!("{}: done.", cmd);
-                    }
-                }
-                "gl" => {
-                    assignments.group_by_left();
-                    println!("Grouped by left.");
-                }
-                "gr" => {
-                    assignments.group_by_right();
-                    println!("Grouped by right.");
-                }
-                "af" => {
-                    loop {
-                        println!(
-                            "{}: input l r (0 <= l < {} and 0 <= r < {}) or something else to finish: ",
-                            cmd, m, n
-                        );
-                        let input = read_line();
-                        let input = &input.trim();
-                        let args: Vec<&str> = input.split_ascii_whitespace().collect();
-                        if args.len() != 2 {
-                            println!(
-                                "Input line \"{}\" contained {} arguments instead of 2 !!!",
-                                &input,
-                                args.len()
-                            );
-                            break;
-                        }
-                        let (l, r) = (args[0].parse::<usize>(), args[1].parse::<usize>());
-                        if let (Ok(l), Ok(r)) = (l, r) {
-                            if !(l < m && r < n) {
-                                println!(
-                                    "You have input (l, r)={:?}, that does not meet the condition: 0 <= l < {} and 0 <= r < {} !!!",
-                                    (l, r),
-                                    m,
-                                    n
-                                );
-                                break;
-                            } else {
-                                // Ok, do "af"
-                                if let Err(str) = assignments.add_forbidden(l, r) {
-                                    println!("{}", str);
-                                } else {
-                                    println!("added forbidden: {:?}:", (l, r));
-                                }
-                            }
-                        } else {
-                            println!(
-                                "Input line contained '{}' instead of 2 non-negative integers !!!",
-                                &input
-                            );
-                            break;
-                        }
-                    }
-                }
-                "restart" => {
-                    println!(" Restarting !!!");
-                    break;
-                }
-                "quit" => {
-                    println!("THE END!");
-                    return;
-                }
-                _ => println!("Unknown command: {}", cmd),
-            }
-        }
+    // TEST result
+    if let Some(assignments) = assignments_data {
+        println!("Data has been set to: {}", assignments);
+    } else {
+        println!("None assignments data has been set!");
     }
 }
