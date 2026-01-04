@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 pub mod cmd;
+pub mod kmn_serde;
 pub mod menu;
-
 use rand::Rng;
 use std::convert::From;
 use std::error::Error;
@@ -10,6 +11,22 @@ use std::fmt::Write;
 // div_ceil
 pub fn div_ceil(left: usize, right: usize) -> usize {
     (left + right - 1) / right
+}
+
+/*
+// generic test:
+fn test_with<F, T>(test: F, tested: T) -> bool
+where
+    F: Fn(T) -> bool,
+{
+    test(tested)
+}
+*/
+
+// Options useful for some procedures
+#[derive(PartialEq)]
+pub enum KmnOption {
+    Force, // force execution despite some errors or warnings
 }
 
 // intersection_size
@@ -22,6 +39,74 @@ pub fn intersection_size(vec1: &Vec<(usize, usize)>, vec2: &Vec<(usize, usize)>)
         }
     }
     count
+}
+
+// `left_neighbors` of right `id` in `pairs`
+pub fn left_neighbors(pairs: &Vec<(usize, usize)>, id: usize) -> Vec<usize> {
+    let mut out = vec![];
+    for (l, r) in pairs {
+        if *r == id {
+            out.push(*l);
+        }
+    }
+    out.sort();
+    out
+}
+
+// `right_neighbors` of left `id` in `pairs`
+pub fn right_neighbors(pairs: &Vec<(usize, usize)>, id: usize) -> Vec<usize> {
+    let mut out = vec![];
+    for (l, r) in pairs {
+        if *l == id {
+            out.push(*r);
+        }
+    }
+    out.sort();
+    out
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LeftVecRightVec {
+    pub left: Vec<usize>,
+    pub right: Vec<usize>,
+}
+
+impl LeftVecRightVec {
+    // println JSON or serde error
+    pub fn println_serde(&self) {
+        match serde_json::to_string(self) {
+            Ok(out) => {
+                println!("{out}")
+            }
+            Err(err) => {
+                println!("{err}")
+            }
+        }
+    }
+}
+
+pub fn all_pairs_from_left_right(left: &Vec<usize>, right: &Vec<usize>) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    for l in left {
+        for r in right {
+            out.push((*l, *r));
+        }
+    }
+    out
+}
+
+pub fn filter_pairs_by_left_or_right(
+    pairs: &Vec<(usize, usize)>,
+    left: &Vec<usize>,
+    right: &Vec<usize>,
+) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    for (l, r) in pairs {
+        if left.contains(l) || right.contains(r) {
+            out.push((*l, *r));
+        }
+    }
+    out
 }
 
 // Side
@@ -122,16 +207,54 @@ impl fmt::Display for Pairs {
 }
 
 impl Pairs {
+    pub fn kmnp_pairs(
+        k: Option<usize>,
+        m: usize,
+        n: usize,
+        p: Option<usize>,
+    ) -> Result<Pairs, &'static str> {
+        match (k, p) {
+            (None, None) => {
+                return Err("kmnp_pairs: (k, p) = (None, None) !!!");
+            }
+            (Some(k), None) => {
+                if 1 <= k && k <= m && m <= n {
+                    return Ok(Self::kmn_pairs(k, m, n));
+                } else {
+                    return Err("kmn_pairs: 1 <= k <= m <= n is not satisfied !!! ");
+                }
+            }
+            (None, Some(p)) => {
+                if 1 <= p && p <= n && n <= m {
+                    let k = (p * m) / n; // should be p = div_ceil( k * n / m ) and 1 <= k
+                    return Ok(Self::kmn_pairs(k, m, n));
+                } else {
+                    return Err("kmn_pairs: 1 <= p <= n <= m is not satisfied !!! ");
+                }
+            }
+            _ => {
+                return Err("kmnp_pairs: Not ipmlemented yet !!!");
+            }
+        }
+    }
+
     pub fn kmn_pairs(k: usize, m: usize, n: usize) -> Pairs {
         // check the parameters: 1 <= k <= m <= n
-        if !(1 <= k && k <= m && m <= n) {
+        // if !(1 <= k && k <= m && m <= n) // it was before
+        if !(1 <= k && k <= m) {
             panic!(
-                "kmn_pairs( {}, {}, {} ) should be 1 <= k && k <= m && m <= n",
+                "kmn_pairs( {}, {}, {} ) should be 1 <= k <= m <= n or 1 <= p <= n <= m !!!",
                 k, m, n
             );
         }
 
         let p = div_ceil(k * n, m); // p = ceil( k*n / m );
+        if !(1 <= p && p <= n) {
+            panic!(
+                "kmn_pairs( {}, {}, {} ) should be 1 <= p <= n for p = ceil( k*n / m ) !!!",
+                k, m, n
+            );
+        }
 
         let mut out = vec![Pair(Left(m * n), Right(m * n)); p * m];
         let mut offset = n - 1; // -1  modulo n
@@ -268,6 +391,33 @@ impl Assignments {
         }
     }
 
+    pub fn new_kmnp(k: Option<usize>, m: usize, n: usize, p: Option<usize>) -> Self {
+        // check k and p parameters
+        if k == None && p == None {
+            panic!("Assignments::new_kmnp: must not be k = p = None !!!")
+        }
+        let pairs = Pairs::kmnp_pairs(k, m, n, p);
+        if let Err(err) = pairs {
+            panic!("Assignments::new_kmnp: {err}");
+        }
+        let l_permutation = Permutation::new(m);
+        let r_permutation = Permutation::new(n);
+        let forbidden = Vec::new();
+        let f_min_backup = Option::None;
+        // either we have `k` or we have `p` and compute k (`or_else` - for laziness)
+        let k = k.unwrap_or_else(|| (p.unwrap() * m) / n);
+        Self {
+            k,
+            m,
+            n,
+            pairs: pairs.expect("Assignments::new_kmnp: pairs shoult be OK here !!!"),
+            l_permutation,
+            r_permutation,
+            forbidden,
+            f_min_backup,
+        }
+    }
+
     // get tuple with parameters: (k,m,n)
     pub fn get_kmn(&self) -> (usize, usize, usize) {
         (self.k, self.m, self.n)
@@ -276,6 +426,10 @@ impl Assignments {
     pub fn p(&self) -> usize {
         let (k, m, n) = self.get_kmn();
         div_ceil(k * n, m) // ceil( k*n/m )
+    }
+
+    pub fn forbidden(&self) -> &Vec<(usize, usize)> {
+        &self.forbidden
     }
 
     pub fn assignments_header(&self) -> String {
@@ -411,13 +565,28 @@ impl Assignments {
     }
 
     // add_forbidden
-    pub fn add_forbidden(&mut self, l: usize, r: usize) -> Result<(), &'static str> {
+    pub fn add_forbidden(&mut self, l: usize, r: usize) -> Result<(), Box<dyn Error>> {
+        let mut err = String::new();
         if l >= self.m {
-            Err("adding forbidden (l,r) with l >= m, where the left set is {0,...,m-1}")
+            writeln!(
+                &mut err,
+                "adding forbidden ({l},{r}) with {l} >= m = {}, where the left set is {{0,...,m-1}}",
+                self.m
+            )?;
+            Err(err.into())
         } else if r >= self.n {
-            Err("adding forbidden (l,r) with r >= n, where the right set is {0,...,n-1}")
+            writeln!(
+                &mut err,
+                "adding forbidden ({l},{r}) with {r} >= n = {}, where the right set is {{0,...,n-1}}",
+                self.n
+            )?;
+            Err(err.into())
         } else if self.forbidden.contains(&(l, r)) {
-            Err("adding forbidden (l,r) that is already in forbidden")
+            writeln!(
+                &mut err,
+                "adding forbidden ({l},{r}) that is already in forbidden"
+            )?;
+            Err(err.into())
         } else {
             self.forbidden.push((l, r));
             self.forbidden.sort();
@@ -425,10 +594,32 @@ impl Assignments {
         }
     }
 
+    pub fn extract_forbidden_by<T: Fn((usize, usize)) -> bool>(
+        &mut self,
+        test: T,
+    ) -> Vec<(usize, usize)> {
+        let mut i = 0;
+        let mut out = vec![];
+        while i < self.forbidden.len() {
+            if test(self.forbidden[i]) {
+                out.push(self.forbidden.swap_remove(i));
+            } else {
+                i += 1;
+            }
+        }
+        out
+    }
+
     // `assigned_to_left`, for `l_id`, returns sorted vector of right IDs assigned to `l_id`
-    pub fn assigned_to_left(&self, l_id: usize) -> Result<Vec<usize>, &'static str> {
+    pub fn assigned_to_left(&self, l_id: usize) -> Result<Vec<usize>, Box<dyn Error>> {
+        let mut err = String::new();
         if l_id >= self.m {
-            Err("assigned_to_left(l_id) with  l_id >= m, where the left set is {0,...,m-1}")
+            writeln!(
+                &mut err,
+                "assigned_to_left({l_id}) with  {l_id} >= m = {}, where the left set is {{0,...,m-1}}",
+                self.m
+            )?;
+            Err(err.into())
         } else {
             let mut out = vec![];
             for (l, r) in self.get_pairs_of_ids() {
@@ -442,9 +633,15 @@ impl Assignments {
     }
 
     // `assigned_to_right`, for `r_id`, returns sorted vector of left IDs assigned to `r_id`
-    pub fn assigned_to_right(&self, r_id: usize) -> Result<Vec<usize>, &'static str> {
+    pub fn assigned_to_right(&self, r_id: usize) -> Result<Vec<usize>, Box<dyn Error>> {
+        let mut err = String::new();
         if r_id >= self.n {
-            Err("assigned_to_right(r_id) with  r_id >= n, where the right set is {0,...,n-1}")
+            writeln!(
+                &mut err,
+                "assigned_to_right({r_id}) with  {r_id} >= n = {}, where the right set is {{0,...,n-1}}",
+                self.n
+            )?;
+            Err(err.into())
         } else {
             let mut out = vec![];
             for (l, r) in self.get_pairs_of_ids() {
@@ -564,11 +761,13 @@ impl Assignments {
         let (k, m, n) = self.get_kmn();
         let p = div_ceil(k * n, m); // p = ceil( k*n / m );
         let mut err = String::new();
-        if !(1 <= k && k <= m && m <= n) {
+        // previous version: if !(1 <= k && k <= m && m <= n) {
+        if !(1 <= k && 1 <= p && k <= m && p <= n) {
             writeln!(
                 &mut err,
-                "(k,m,n)={:?}, that does not meet the condition: 1 <= k <= m <= n !!!",
-                (k, m, n)
+                // previous version: "(k,m,n)={:?}, that does not meet the condition: 1 <= k <= m <= n !!!",
+                "test_assignment_pairs: (k, m, n, p)={:?}, that does not meet the condition: 1 <= k && 1<=p && k <= m && p <= n !!!",
+                (k, m, n, p)
             )?;
         }
         // test the number of pairs

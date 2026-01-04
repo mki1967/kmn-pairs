@@ -1,4 +1,7 @@
+// use serde::{Deserialize, Serialize};
+
 // use kmn_pairs::cmd::*;
+use kmn_pairs::kmn_serde::*;
 use kmn_pairs::menu::*;
 use kmn_pairs::*;
 
@@ -12,8 +15,8 @@ fn main() {
     println!(
         r#"
 --------------------------------------------------------------------------------------------------------------------
-   For integer parameters k,m,n, such that 1 <= k <= m <= n, the program:
-   - finds P of size pm, where p=ceiling(kn/m), such that:
+   For integers  m, n, k, p such that 1 <= k <= m and 1 <= p <= n and p = ceiling(kn / m) the program:
+   - finds P of size pm such that:
         - P is a subset of the Cartesian product {{0,...,m-1}}x{{0,...,n-1}}, and
         - for each l in {{0,...,m-1}}, P contains p pairs from {{l}}x{{0,...,n-1}}  and
         - for each r in {{0,...,n-1}}, P contains either k or k+1 pairs from {{0,...,m-1}}x{{r}}, and
@@ -49,9 +52,18 @@ fn main() {
     kmn_pairs_menu(&mut assignments_data);
 
     // TEST result
+    println!("\nFINAL RESULT:\n");
     if let Some(assignments) = assignments_data {
         println!("Data has been set to: {}", assignments);
+        println!(
+            "JSON:\n{}",
+            match serde_json::to_string(&SerdeKmnAssignment::from(&assignments)) {
+                Ok(out) => out,
+                Err(err) => err.to_string(),
+            }
+        )
     } else {
         println!("None assignments data has been set!");
     }
+    println!("");
 }
