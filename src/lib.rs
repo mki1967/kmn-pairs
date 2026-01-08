@@ -418,6 +418,134 @@ impl Assignments {
         }
     }
 
+    // sorts and tests left_ids and creates remapping of the right ids to {0, ..., left_ids.len()-1}
+    pub fn sort_and_test_subset_of_left_ids(
+        &self,
+        left_ids: &mut Vec<usize>,
+    ) -> Result<Vec<Option<usize>>, Box<dyn Error>> {
+        let mut err = String::new();
+        left_ids.sort();
+        let m = self.m;
+        let mut prev = None;
+        for i in 0..left_ids.len() {
+            let l = left_ids[i];
+            if l >= m {
+                writeln!(&mut err, "In left_ids: {l} >= m = {m} !!!",)?;
+            }
+            if Some(l) == prev {
+                writeln!(&mut err, "In left_ids: duplicate of {l} !!!",)?;
+            }
+            prev = Some(l);
+        }
+
+        if err.len() > 0 {
+            Err(err.into())
+        } else {
+            let mut map: Vec<Option<usize>> = vec![None; m];
+            for i in 0..left_ids.len() {
+                map[left_ids[i]] = Some(i);
+            }
+            Ok(map)
+        }
+    }
+
+    // try to create Assignments with left ids reduced to sorted left_ids with forbidden left sides remapped to their new ids
+    pub fn left_reduced_to(
+        &self,
+        left_ids: &Vec<usize>,
+        k: Option<usize>,
+        p: Option<usize>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let mut left_ids = left_ids.clone();
+        // test left_ids
+        let test_result = self.sort_and_test_subset_of_left_ids(&mut left_ids);
+        let map: Vec<Option<usize>>;
+        match test_result {
+            Err(err) => {
+                return Err(err.into());
+            }
+            Ok(map1) => {
+                map = map1;
+            }
+        }
+        let (m, n) = (left_ids.len(), self.n);
+        // test (k,m,n,p)
+        if let Err(err) = Pairs::kmnp_pairs(k, m, n, p) {
+            return Err(err.into());
+        }
+        let mut assignments = Assignments::new_kmnp(k, m, n, p);
+        for (l, r) in &self.forbidden {
+            if let Some(l1) = map[*l] {
+                assignments.forbidden.push((l1, *r));
+            }
+        }
+        Ok(assignments)
+    }
+
+    // sorts and tests right_ids and creates remapping of the right ids to {0, ..., right_ids.len()-1}
+    pub fn sort_and_test_subset_of_right_ids(
+        &self,
+        right_ids: &mut Vec<usize>,
+    ) -> Result<Vec<Option<usize>>, Box<dyn Error>> {
+        let mut err = String::new();
+        right_ids.sort();
+        let n = self.n;
+        let mut prev = None;
+        for i in 0..right_ids.len() {
+            let r = right_ids[i];
+            if r >= n {
+                writeln!(&mut err, "In right_ids: {r} >= n = {n} !!!",)?;
+            }
+            if Some(r) == prev {
+                writeln!(&mut err, "In right_ids: duplicate of {r} !!!",)?;
+            }
+            prev = Some(r);
+        }
+
+        if err.len() > 0 {
+            Err(err.into())
+        } else {
+            let mut map: Vec<Option<usize>> = vec![None; n];
+            for i in 0..right_ids.len() {
+                map[right_ids[i]] = Some(i);
+            }
+            Ok(map)
+        }
+    }
+
+    // try to create Assignments with right ids reduced to sorted right_ids with forbidden right sides remapped to their new ids
+    pub fn right_reduced_to(
+        &self,
+        right_ids: &Vec<usize>,
+        k: Option<usize>,
+        p: Option<usize>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let mut right_ids = right_ids.clone();
+        // test right_ids
+        let test_result = self.sort_and_test_subset_of_right_ids(&mut right_ids);
+        let map: Vec<Option<usize>>;
+        match test_result {
+            Err(err) => {
+                return Err(err.into());
+            }
+            Ok(map1) => {
+                map = map1;
+            }
+        }
+        let (m, n) = (self.m, right_ids.len());
+        // test (k,m,n,p)
+        if let Err(err) = Pairs::kmnp_pairs(k, m, n, p) {
+            return Err(err.into());
+        }
+        let mut assignments = Assignments::new_kmnp(k, m, n, p);
+        for (l, r) in &self.forbidden {
+            if let Some(r1) = map[*r] {
+                assignments.forbidden.push((*l, r1));
+            }
+        }
+        Ok(assignments)
+    }
+
     // get tuple with parameters: (k,m,n)
     pub fn get_kmn(&self) -> (usize, usize, usize) {
         (self.k, self.m, self.n)
@@ -703,7 +831,7 @@ impl Assignments {
         if let Err(e) = self.test_right_ids(&neighbors) {
             writeln!(&mut err, "{}", e.to_string())?;
         }
-        let prev = Option::None;
+        let mut prev = Option::None;
         for r in neighbors {
             if Some(r) == prev {
                 writeln!(
@@ -712,6 +840,7 @@ impl Assignments {
                     id, r
                 )?;
             }
+            prev = Some(r);
         }
         if err.len() > 0 {
             Err(err.into())
@@ -740,7 +869,7 @@ impl Assignments {
         if let Err(e) = self.test_left_ids(&neighbors) {
             writeln!(&mut err, "{}", e.to_string())?;
         }
-        let prev = Option::None;
+        let mut prev = Option::None;
         for r in neighbors {
             if Some(r) == prev {
                 writeln!(
@@ -749,6 +878,7 @@ impl Assignments {
                     id, r
                 )?;
             }
+            prev = Some(r);
         }
         if err.len() > 0 {
             Err(err.into())

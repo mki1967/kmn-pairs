@@ -139,19 +139,23 @@ pub fn edit_menu(ranking: &mut Ranking) {
             prlvrvj    print rankings
             prankersf  print rankers' infos with forbidden
             prkrsfar   print rankers' infos with forbidden, assignments and rankings
+            prkdfa     print ranked infos with forbidden and assignments
             pscores    print scores
             presults   print results
+            preduced   print json reduced to ranked in some position of results
+            prkrsred   print json with some rankers reduced
             PSCORES!   force printing scores (despite of invalid rankings)
             PRESULTS!  force printing results (despite of invalid rankings)
+            PREDUCED!  force printing json reduced to some position
             tr         test rankings
-            json       input one-line JSON ranking data
+            json       print one-line JSON ranking data
             iranker    input rankers' info label
             iranked    input ranked info label
             irlvrvj    input rankings from one-line JSONs
             dr         delete rankings
-            simid      simulate rankings by identit rankers' scores +/- random_dev
-            simrand    simulate rankings by random rankers' scores
-            quit       quit 'EDIT RANKING' menu without defining ranking
+            simid      simulate rankings, where score = id_of_ranked +/- random_dev
+            simrand    simulate rankings with random scores
+            quit       quit 'EDIT RANKING' menu (prints JSON ranking data)
             "
                 );
             }
@@ -181,6 +185,9 @@ pub fn edit_menu(ranking: &mut Ranking) {
             "prkrsfar" => {
                 prkrsfar(ranking);
             }
+            "prkdfa" => {
+                prkdfa(ranking);
+            }
             "pscores" => {
                 pscores(ranking, &vec![]);
             }
@@ -194,6 +201,16 @@ pub fn edit_menu(ranking: &mut Ranking) {
             "PRESULTS!" => {
                 println!("FORCING !!!");
                 presults(ranking, &vec![KmnOption::Force]);
+            }
+            "preduced" => {
+                preduced(ranking, &vec![]);
+            }
+            "PREDUCED!" => {
+                println!("FORCING !!!");
+                preduced(ranking, &vec![KmnOption::Force]);
+            }
+            "prkrsred" => {
+                prkrsred(ranking);
             }
             "tr" => {
                 println!("{cmd}: Testing the rankings:\n");
@@ -348,8 +365,11 @@ pub fn presults(ranking: &Ranking, options: &Vec<KmnOption>) {
     match ranking.results(options) {
         Ok(results) => {
             for position in results {
+                let ranked = position.ranked_ids();
                 println!("\nPosition 'after {}':\n", position.after);
-                for ranked_avg in position.ranked_set {
+                print!("  ranked infos: ");
+                ranked_infos_collect(ranking, &ranked).println_serde();
+                for ranked_avg in &position.ranked_set {
                     match serde_json::to_string(&ranked_avg) {
                         Ok(out) => {
                             println!("  {}", out)
@@ -365,6 +385,206 @@ pub fn presults(ranking: &Ranking, options: &Vec<KmnOption>) {
             println!("{err}");
         }
     }
+}
+
+// print ranking with reduced rankers
+pub fn prkrsred(ranking: &Ranking) {
+    let cmd = "prkrsred";
+    let mut rankers_ids: Vec<usize> = (0..ranking.rankers.len()).into_iter().collect();
+
+    // TODO: loop to input rankers_ids
+    'input: loop {
+        print!("{cmd}: still remaing rankers:");
+        rankers_infos_collect(ranking, &rankers_ids).println_serde();
+        println!(
+            "Input 0<= id <= {} to be removed (or not `usize` to finish):",
+            ranking.rankers.len()
+        );
+        match serde_json::from_str::<usize>(&read_line()) {
+            Ok(id) => {
+                rankers_ids.retain(|x| *x != id);
+                if rankers_ids.len() <= 1 {
+                    println!("Must remain at least one ranker !");
+                    break 'input;
+                }
+            }
+            Err(err) => {
+                println!("{cmd}: {err}");
+                break 'input;
+            }
+        }
+    }
+    print!("{cmd}: reducing to rankers:");
+    rankers_infos_collect(ranking, &rankers_ids).println_serde();
+
+    let (m, n) = (rankers_ids.len(), ranking.ranked.len());
+    if m < n {
+        println!("{cmd}: Input k <= m = {m}:");
+        match serde_json::from_str::<usize>(&read_line()) {
+            Ok(k) if k <= m => match &ranking.rankers_reduced_to(&rankers_ids, Some(k), None) {
+                Ok(reduced) => match serde_json::to_string(&SerdeRanking::from(reduced)) {
+                    Ok(out) => {
+                        println!("{out}");
+                    }
+                    Err(err) => {
+                        println!("{err}");
+                    }
+                },
+                Err(err) => {
+                    println!("{err}");
+                }
+            },
+            Ok(k) => {
+                println!("bad k = {k}");
+            }
+            Err(err) => {
+                println!("{err}");
+            }
+        }
+    } else {
+        println!("{cmd}: Input p <= n = {n}:");
+        match serde_json::from_str::<usize>(&read_line()) {
+            Ok(p) if p <= n => match &ranking.rankers_reduced_to(&rankers_ids, None, Some(p)) {
+                Ok(reduced) => match serde_json::to_string(&SerdeRanking::from(reduced)) {
+                    Ok(out) => {
+                        println!("{out}");
+                    }
+                    Err(err) => {
+                        println!("{err}");
+                    }
+                },
+                Err(err) => {
+                    println!("{err}");
+                }
+            },
+            Ok(p) => {
+                println!("bad p = {p}");
+            }
+            Err(err) => {
+                println!("{err}");
+            }
+        }
+    }
+}
+
+pub fn preduced(ranking: &Ranking, options: &Vec<KmnOption>) {
+    let cmd = "preduced";
+    match &ranking.results(options) {
+        Ok(results) => {
+            let afters: &Vec<usize> = &results.into_iter().map(|p| p.after).collect();
+            println!("{cmd}: Input p from {afters:?} select the position 'after p':");
+            match serde_json::from_str::<usize>(&read_line()) {
+                Ok(p) => {
+                    if let Some(position) = &results.into_iter().find(|x| x.after == p) {
+                        let ranked_ids = position.ranked_ids();
+                        let (m, n) = (ranking.rankers.len(), ranked_ids.len());
+                        if m < n {
+                            println!("{cmd}: Input k <= m = {m}:");
+                            match serde_json::from_str::<usize>(&read_line()) {
+                                Ok(k) if k <= m => {
+                                    match &ranking.ranked_reduced_to(&ranked_ids, Some(k), None) {
+                                        Ok(reduced) => {
+                                            match serde_json::to_string(&SerdeRanking::from(
+                                                reduced,
+                                            )) {
+                                                Ok(out) => {
+                                                    println!("{out}");
+                                                }
+                                                Err(err) => {
+                                                    println!("{err}");
+                                                }
+                                            }
+                                        }
+                                        Err(err) => {
+                                            println!("{err}");
+                                        }
+                                    }
+                                }
+                                Ok(k) => {
+                                    println!("bad k = {k}");
+                                }
+                                Err(err) => {
+                                    println!("{err}");
+                                }
+                            }
+                        } else {
+                            println!("{cmd}: Input p <= n = {n}:");
+                            match serde_json::from_str::<usize>(&read_line()) {
+                                Ok(p) if p <= n => {
+                                    match &ranking.ranked_reduced_to(&ranked_ids, None, Some(p)) {
+                                        Ok(reduced) => {
+                                            match serde_json::to_string(&SerdeRanking::from(
+                                                reduced,
+                                            )) {
+                                                Ok(out) => {
+                                                    println!("{out}");
+                                                }
+                                                Err(err) => {
+                                                    println!("{err}");
+                                                }
+                                            }
+                                        }
+                                        Err(err) => {
+                                            println!("{err}");
+                                        }
+                                    }
+                                }
+                                Ok(p) => {
+                                    println!("bad p = {p}");
+                                }
+                                Err(err) => {
+                                    println!("{err}");
+                                }
+                            }
+                        }
+                    } else {
+                        println!("{p} in not in {afters:?}");
+                    }
+                }
+                Err(err) => {
+                    println!("{err}");
+                }
+            }
+        }
+        Err(err) => {
+            println!("{err}");
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct VecOfInfos(Vec<(usize, Option<String>)>);
+
+impl VecOfInfos {
+    // println JSON or serde error
+    pub fn println_serde(&self) {
+        match serde_json::to_string(self) {
+            Ok(out) => {
+                println!("{out}")
+            }
+            Err(err) => {
+                println!("{err}")
+            }
+        }
+    }
+}
+
+pub fn ranked_infos_collect(ranking: &Ranking, ranked: &Vec<usize>) -> VecOfInfos {
+    let vec_of_infos = ranked
+        .clone()
+        .into_iter()
+        .map(|x| (x, ranking.ranked[x].info.clone()))
+        .collect();
+    VecOfInfos(vec_of_infos)
+}
+
+pub fn rankers_infos_collect(ranking: &Ranking, rankers: &Vec<usize>) -> VecOfInfos {
+    let vec_of_infos = rankers
+        .clone()
+        .into_iter()
+        .map(|x| (x, ranking.rankers[x].info.clone()))
+        .collect();
+    VecOfInfos(vec_of_infos)
 }
 
 // Print rankings:
@@ -409,12 +629,15 @@ pub fn prankersf(ranking: &Ranking) {
                 ""
             }
         );
-        println!("Forbidden (left = [ranker], right = forbidden):");
+        println!("\nForbidden (left = [ranker], right = forbidden_ranked):");
+        let ranked = right_neighbors(forbidden, l);
         LeftVecRightVec {
             left: vec![l],
-            right: right_neighbors(forbidden, l),
+            right: ranked.clone(),
         }
         .println_serde();
+        print!("right infos: ");
+        ranked_infos_collect(ranking, &ranked).println_serde();
     }
     println!("\n---------------------------------------------------------------------\n");
 }
@@ -439,25 +662,84 @@ pub fn prkrsfar(ranking: &Ranking) {
                 ""
             }
         );
-        println!("Forbidden (left = [ranker], right = forbidden):");
+        println!("\nForbidden (left = [ranker], right = forbidden_ranked):");
+        let right = right_neighbors(forbidden, l);
         LeftVecRightVec {
             left: vec![l],
-            right: right_neighbors(forbidden, l),
+            right: right.clone(),
         }
         .println_serde();
-        println!("Assigned (left = [ranker], right = assigned):");
+        print!("right infos: ");
+        ranked_infos_collect(ranking, &right).println_serde();
+
+        println!("\nAssigned (left = [ranker], right = assigned_ranked):");
+        let right = right_neighbors(&assignments, l);
         LeftVecRightVec {
             left: vec![l],
-            right: right_neighbors(&assignments, l),
+            right: right.clone(),
         }
         .println_serde();
-        println!("Ranking (left = [ranker], right = assigned):");
+        print!("right infos: ");
+        ranked_infos_collect(ranking, &right).println_serde();
+
+        println!("\nRanking (left = [ranker], right = ranked_ranked):");
         prllvrvj(ranking, l);
-        if let Some(rnk) = &ranking.rankers[l].ranking {
-            if let Err(err) = ranking.test_ranking(l, rnk) {
-                println!("{err}");
+        match &ranking.rankers[l].ranking {
+            Some(rnk) => {
+                if let Err(err) = ranking.test_ranking(l, rnk) {
+                    println!("{err}");
+                } else {
+                    print!("right infos: ");
+                    ranked_infos_collect(ranking, &rnk).println_serde();
+                }
+            }
+            None => {
+                println!("NO RANKING!!!");
             }
         }
+    }
+    println!("\n---------------------------------------------------------------------\n");
+}
+
+// print ranked infos with forbidden and assignments
+pub fn prkdfa(ranking: &Ranking) {
+    let cmd = "prankersf";
+    let Some(assignments) = &ranking.assignments_data else {
+        println!("{cmd}: assignments_data == None");
+        return;
+    };
+    // TODO
+    let forbidden = assignments.forbidden();
+    let assignments = assignments.get_pairs_of_ids();
+    for r in 0..ranking.ranked.len() {
+        println!("\n---------------------------------------------------------------------\n");
+        println!(
+            "ID = {r},  INFO = {:?}",
+            if let Some(i) = &ranking.ranked[r].info {
+                i
+            } else {
+                ""
+            }
+        );
+        println!("\nForbidden (left = [ranked], right = forbidden_rankers):");
+        let right = left_neighbors(forbidden, r);
+        LeftVecRightVec {
+            left: vec![r],
+            right: right.clone(),
+        }
+        .println_serde();
+        print!("rankers infos: ");
+        rankers_infos_collect(ranking, &right).println_serde();
+
+        println!("\nAssigned (left = [ranked], right = assigned_rankers):");
+        let right = left_neighbors(&assignments, r);
+        LeftVecRightVec {
+            left: vec![r],
+            right: right.clone(),
+        }
+        .println_serde();
+        print!("rankers infos: ");
+        rankers_infos_collect(ranking, &right).println_serde();
     }
     println!("\n---------------------------------------------------------------------\n");
 }
@@ -549,6 +831,124 @@ impl Ranking {
                 });
             }
         }
+    }
+
+    // try to create Ranking with rankers' ids reduced to sorted rankers_ids with forbidden remapped to the new ids
+    pub fn rankers_reduced_to(
+        &self,
+        rankers_ids: &Vec<usize>,
+        k: Option<usize>,
+        p: Option<usize>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let Some(my_assignments) = &self.assignments_data else {
+            return Err("rankers_reduced_to: NO assignments_data !!!???".into());
+        };
+        let mut rankers_ids = rankers_ids.clone();
+        // test rankers_ids
+        let test_result = my_assignments.sort_and_test_subset_of_left_ids(&mut rankers_ids);
+        let map: Vec<Option<usize>>;
+        match test_result {
+            Err(err) => {
+                return Err(err.into());
+            }
+            Ok(map1) => {
+                map = map1;
+            }
+        }
+
+        // TEST
+        // println!("test: map = {map:?}");
+
+        let assignments: Assignments;
+        match my_assignments.left_reduced_to(&rankers_ids, k, p) {
+            Err(err) => {
+                return Err(err.into());
+            }
+            Ok(a) => {
+                assignments = a;
+            }
+        }
+        let mut ranking = Ranking::new();
+        ranking.assignments_data = Some(assignments);
+        ranking.make_vectors();
+        let (_k, m, n) = (&my_assignments).get_kmn();
+        // copy infos of (not reduced) ranked
+        for i in 0..n {
+            ranking.ranked[i].info = self.ranked[i].info.clone();
+        }
+        // map infos to new ids of reduced rankers
+        for i in 0..m {
+            if let Some(i1) = map[i] {
+                ranking.rankers[i1].info = self.rankers[i].info.clone();
+                /*
+                println!(
+                    "test ranking.rankers[{i1}].info = {:?}",
+                    ranking.rankers[i1].info
+                );
+                println!("test self.rankers[{i}].info = {:?}", self.rankers[i].info);
+                */
+            }
+        }
+        Ok(ranking)
+    }
+
+    // try to create Ranking with ranked ids reduced to sorted ranked_ids with forbidden remapped to the new ids
+    pub fn ranked_reduced_to(
+        &self,
+        ranked_ids: &Vec<usize>,
+        k: Option<usize>,
+        p: Option<usize>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let Some(my_assignments) = &self.assignments_data else {
+            return Err("ranked_reduced_to: NO assignments_data !!!???".into());
+        };
+        let mut ranked_ids = ranked_ids.clone();
+        // test ranked_ids
+        let test_result = my_assignments.sort_and_test_subset_of_right_ids(&mut ranked_ids);
+        let map: Vec<Option<usize>>;
+        match test_result {
+            Err(err) => {
+                return Err(err.into());
+            }
+            Ok(map1) => {
+                map = map1;
+            }
+        }
+
+        // TEST
+        // println!("test: map = {map:?}");
+
+        let assignments: Assignments;
+        match my_assignments.right_reduced_to(&ranked_ids, k, p) {
+            Err(err) => {
+                return Err(err.into());
+            }
+            Ok(a) => {
+                assignments = a;
+            }
+        }
+        let mut ranking = Ranking::new();
+        ranking.assignments_data = Some(assignments);
+        ranking.make_vectors();
+        let (_k, m, n) = (&my_assignments).get_kmn();
+        // copy infos of (not reduced) rankers
+        for i in 0..m {
+            ranking.rankers[i].info = self.rankers[i].info.clone();
+        }
+        // map infos to new ids of reduced ranked
+        for i in 0..n {
+            if let Some(i1) = map[i] {
+                ranking.ranked[i1].info = self.ranked[i].info.clone();
+                /*
+                println!(
+                    "test ranking.ranked[{i1}].info = {:?}",
+                    ranking.ranked[i1].info
+                );
+                println!("test self.ranked[{i}].info = {:?}", self.ranked[i].info);
+                */
+            }
+        }
+        Ok(ranking)
     }
 
     // make ranker scores for simulations
@@ -932,6 +1332,12 @@ pub struct RankedAvg {
 pub struct Position {
     after: usize, // number of all ranked from higher positions
     ranked_set: Vec<RankedAvg>,
+}
+
+impl Position {
+    pub fn ranked_ids(&self) -> Vec<usize> {
+        (&self.ranked_set).into_iter().map(|x| x.ranked).collect()
+    }
 }
 
 /*

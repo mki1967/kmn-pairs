@@ -209,9 +209,9 @@ pub fn kmn_pairs_menu(assignments_data: &mut Option<Assignments>) {
             aflvrvj  add to forbidden all the pairs between left and right vectors from one-line JSONs
             df       delete forbidden pair (l, r) (prints deleted pairs)
             dfl      delete all forbidden pairs with left ID l (prints deleted pairs)
-            dfl      delete all forbidden pairs with right ID r (prints deleted pairs)
+            dfr      delete all forbidden pairs with right ID r (prints deleted pairs)
             test     do some tests ...
-            quit     quit the 'EDIT ASSIGNMENTS' menu
+            quit     quit the 'EDIT ASSIGNMENTS' menu (prints JSON assignments data)
 "
                         );
                     }
