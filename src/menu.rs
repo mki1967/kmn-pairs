@@ -33,8 +33,8 @@ fn input_menu(assignments_data: &mut Option<Assignments>) {
                 println!(
                     "
         command action:
-            kmn        input k,m,n parameters for deafult assignments
-            mn         input parameters m,n and then either k or p for deafult assignments
+            kmn        input k,m,n parameters for default assignments
+            mn         input parameters m,n and then either k or p for default assignments
             json       input one-line JSON assignments data
             quit       quit 'DEFINE ASSIGNMENTS' menu without defining assignments
             "
@@ -164,7 +164,7 @@ pub fn kmn_pairs_menu(assignments_data: &mut Option<Assignments>) {
     }
     if let Some(assignments) = assignments_data {
         'cmd: loop {
-            // MENU - Actions on the assigments:
+            // MENU - Actions on the assignments:
             loop {
                 // let (_k, m, n) = assignments.get_kmn(); // get the assignments' parameters
                 println!(
@@ -182,11 +182,11 @@ pub fn kmn_pairs_menu(assignments_data: &mut Option<Assignments>) {
                             "
         command action:
             p        print current state of assignments and forbidden
-            pa       print only assigments
-            palvrvj  print assigments for each left and for each right as one-line JSONs
-            pf       print only fordidden
-            pflvrvj  print fordidden for each left and for each right as one-line JSONs
-            pfa      print only fordidden in assignments
+            pa       print only assignments
+            palvrvj  print assignments for each left and for each right as one-line JSONs
+            pf       print only forbidden
+            pflvrvj  print forbidden for each left and for each right as one-line JSONs
+            pfa      print only forbidden in assignments
             json     print one-line JSON assignments data
             gl       group assignments by left
             gr       group assignments by right
@@ -201,7 +201,7 @@ pub fn kmn_pairs_menu(assignments_data: &mut Option<Assignments>) {
             bsr      back and swap right IDs of forbidden with random other right IDs
             bslr     back and swap left and right IDs of forbidden with random other left and right IDs
             sbrk     'skeleton breaking' (result may be not isomorphic)
-            back     go back to the backup with minimal forbidden pairs in assigments
+            back     go back to the backup with minimal forbidden pairs in assignments
             af       add forbidden pairs
             arf      try to add some random forbidden pairs
             arfl     try to add some random forbidden pairs with given left id

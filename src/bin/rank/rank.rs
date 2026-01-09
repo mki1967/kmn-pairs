@@ -100,7 +100,7 @@ fn input_menu(ranking_data: &mut Option<Ranking>) {
 pub fn edit_menu(ranking: &mut Ranking) {
     let mut rng = rand::rng(); // random number generator
     if ranking.assignments_data.is_none() {
-        println!("You have to define some assigments first!!!");
+        println!("You have to define some assignments first!!!");
         return;
     }
 
