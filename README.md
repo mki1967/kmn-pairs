@@ -13,13 +13,11 @@ such that
 
 ## Usecase: rankigns
 
-You can:
-* prepare the assigments between the "left" and the "right" elements,
-* define rankings of each group of the "left" elements assigned to a "right" element,
-* compute scores from the rankings and final positions of the "left" elements,
-by running:
+You can run:
   ```
   $ cargo run --bin rank
   ```
-
- 
+to:
+* prepare the assigments between the "left" and the "right" elements,
+* define ranking in each group of "left" elements assigned to "right" element, and
+* get final positions of the "left" elements by scores computed from the rankings.
